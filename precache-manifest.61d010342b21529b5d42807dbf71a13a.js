@@ -1,6 +1,6 @@
 self.__precacheManifest = (self.__precacheManifest || []).concat([
   {
-    "revision": "eff7e89320318e1e0a1e08d3773c18d8",
+    "revision": "b7203b0bc40b8a3697a84c218e99699e",
     "url": "/sudoku/index.html"
   },
   {
