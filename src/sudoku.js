@@ -4,7 +4,16 @@ import update from 'immutability-helper'; // ES6
 export default class Sudoku extends React.Component {
     constructor(props) {
         super(props)
-        this.state = { table: this.createTable(), focused: { i: -1, j: -1 }, valid: true, violator: { i: -1, j: -1 } };
+        this.state = {
+            table: this.createTable(),
+            focused: { i: -1, j: -1 },
+            valid: true,
+            violator: { i: -1, j: -1 },
+            invalidRows: [],
+            invalidCols: [],
+            invalidAreas: [],
+            invalidDiags: [],
+        };
         this._handleInput = this._handleInput.bind(this)
         this.getAllAreas = this.getAllAreas.bind(this)
         this.getArea = this.getArea.bind(this)
@@ -23,14 +32,13 @@ export default class Sudoku extends React.Component {
     getDiag = (back = false) => this.state.table.map((row, i) => row[8 * back + (back ? -1 : 1) * i]);
 
     getAllAreas = () => Array.prototype.concat(...[...Array(3).keys()].map(x =>
-        [...Array(3).keys()].map(y => {
-            return this.getArea(x, y)})));
+        [...Array(3).keys()].map(y =>
+            this.getArea(y, x))));
 
     getAllConstraits = () => {
         const rows = this.state.table;
         const cols = [...Array(9).keys()].map(col => this.getCol(col));
         const areas = this.getAllAreas(this.state.table);
-        console.log(areas)
         const diags = [this.getDiag(), this.getDiag(true)];
         return [
             ...rows,
@@ -40,14 +48,51 @@ export default class Sudoku extends React.Component {
         ];
     }
 
-    allDistinct = vals => {
+    allDistinct = (vals, i) => {
         const filtered = vals.filter(x => typeof x === "number" && x > 0)
-        return [...new Set(filtered)].length === filtered.length
+        let result = [...new Set(filtered)].length === filtered.length;
+        if (!result) {
+            console.log(i, vals)
+            if (i <= 8) {
+                // row invalid
+                this.setState({invalidRows: update(this.state.invalidRows, {
+                    $push: [i]
+                })})
+            } 
+            if (i >= 9 && i <= 17) {
+                // col invalid
+                this.setState({invalidCols: update(this.state.invalidCols, {
+                    $push: [i === 17 ? 8 : i % 9]
+                })})
+            }
+            if (i >= 18 && i <= 26) {
+                // col invalid
+                this.setState({invalidAreas: update(this.state.invalidAreas, {
+                    $push: [i === 26 ? 8 : i % 9]
+                })})
+            }
+            if (i === 27) {
+                // col invalid
+                this.setState({invalidDiags: update(this.state.invalidDiags, {
+                    $push: [0]
+                })})
+            }
+            if (i === 28) {
+                // col invalid
+                this.setState({invalidDiags: update(this.state.invalidDiags, {
+                    $push: [1]
+                })})
+            }
+        }
+        return result;
     }
 
-    allListsDistinct = lists => lists.every(this.allDistinct)
 
-    validGameState = () => this.allListsDistinct(this.getAllConstraits())
+    allListsDistinct = lists => lists.map(this.allDistinct).every((x) => x)
+
+    validGameState = () => {
+        return this.allListsDistinct(this.getAllConstraits())
+    }
 
     focus(i, j) {
         if (this.state.valid) {
@@ -58,13 +103,19 @@ export default class Sudoku extends React.Component {
     }
 
     _handleInput(e) {
-        if (this.state.focused.i >= 0 && this.state.focused.j >= 0 && !isNaN(e.key)) {
+        if (this.state.focused.i >= 0 && this.state.focused.j >= 0 && (!isNaN(e.key) || e.key === "Backspace") ) {
             let i = this.state.focused.i;
             let j = this.state.focused.j;
             let inst = {}
             let val;
             try {
-                val = parseInt(e.key)
+                if (e.key === "Backspace") {
+                    val = 0;
+                } else if (e.key === " ") {
+                    val = 0
+                } else {
+                    val = parseInt(e.key)
+                }
             } catch (error) {
                 return console.error(error);
             }
@@ -73,13 +124,17 @@ export default class Sudoku extends React.Component {
             inst[i][j] = { $set: val }
 
             this.setState({ table: update(this.state.table, inst) },
-                () => this.allListsDistinct(this.getAllConstraits())
-                    ? this.setState({ valid: true, violator: { i: -1, j: -1 } })
-                    : this.setState({ valid: false, violator: { i: i, j: j } }))
+                () => this.setState({
+                    invalidRows: [],
+                    invalidCols: [],
+                    invalidAreas: [],
+                    invalidDiags: [],
+                }, () => this.allListsDistinct(this.getAllConstraits())
+                ? this.setState({ valid: true, violator: { i: -1, j: -1 } })
+                : this.setState({ valid: false, violator: { i: i, j: j } })))
         } else if (this.state.valid) {
             const inc = (x) => Math.min(x + 1, 8);
             const dec = (x) => Math.max(x - 1, 0);
-            console.log(e.key)
             switch (e.key) {
                 case "w":
                     this.setState({ focused: update(this.state.focused, { i: dec }) }); break;
@@ -110,7 +165,12 @@ export default class Sudoku extends React.Component {
                     {this.state.table.map((row, i) => <tr key={`row_${i}`} className="table-row">
                         {row.map((_, j) =>
                             <td
-                                className={`table-background-cell`}
+                                className={`table-background-cell \
+                                ${(this.state.invalidRows.indexOf(i) >= 0
+                                    || this.state.invalidCols.indexOf(j) >= 0
+                                    || this.state.invalidAreas.map(x => (i < Math.floor(x / 3) * 3 + 3) && (i >= Math.floor(x / 3) * 3) && (j < x % 3 * 3 + 3) && (j >= x % 3 * 3)).some(x => x))
+                                    || (this.state.invalidDiags.indexOf(0) >= 0 && i === j)
+                                    || (this.state.invalidDiags.indexOf(1) >= 0 && i === (8 - j)) ? "invalid" : ""}`}
                                 key={`$cell-${i}-${j}`}
                             >
                             </td>
@@ -140,6 +200,11 @@ export default class Sudoku extends React.Component {
                 {[...Array(9).keys()].map(i => <div className={"key-wrapper"} key={i}><div className={"key"} onClick={() => this._handleInput({ key: i + 1 })}>
                     {i + 1}
                 </div></div>)}
+            </div>
+            <div className="keyboard">
+               <div className={"key-backspace"} onClick={() => this._handleInput({ key: 0 })}>
+                    {`DEL`}
+                </div>
             </div>
         </div>
     }
