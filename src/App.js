@@ -15,7 +15,7 @@ class App extends React.Component {
       <div className="App">
         <h1><img src={logo} alt="S" className="App-logo" />udoku</h1>
         <Sudoku />
-        <footer>&copy; 2015 Jiacheng Jiang</footer>
+        <footer>&copy; 2019 Jiacheng Jiang</footer>
       </div>
     );
   }
